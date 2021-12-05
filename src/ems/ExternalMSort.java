@@ -7,9 +7,15 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.Scanner;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 public class ExternalMSort {
+
+    private static ExecutorService processExecutor = Executors.newFixedThreadPool(8);
+    private static ExecutorService ioExecutor = Executors.newFixedThreadPool(20);
 
     private static final String VALUE_SEPARATOR = ",";
     private static final byte[] VALUE_SEPARATOR_BYTES = VALUE_SEPARATOR.getBytes();
@@ -29,33 +35,50 @@ public class ExternalMSort {
         final File outFile = new File("data/sorted-" + inFile.getName());
         final File partitionFolder = new File("data/tmp-partx/");
         long time = System.currentTimeMillis();
-        new ExternalMSort(1024 * 512).extSort(inFile, outFile, partitionFolder);
+        ExternalMSort externalMSort = new ExternalMSort(1024 * 700);
+        externalMSort.extSort(inFile, outFile, partitionFolder);
         System.out.println("Exec time : " + (System.currentTimeMillis() - time));
+        processExecutor.shutdown();
+        ioExecutor.shutdown();
+        System.out.println("Verifying output file...");
+        System.out.println("Sorted : " + new ExternalMSort().isSorted(outFile));
     }
 
     public void extSort(final File inFile, final File outFile, final File partitionFolder) throws IOException {
         if (partitionFolder.exists())
             removeTempFolder(partitionFolder);
         partitionFolder.mkdirs();
-        inMemorySort(inFile, partitionFolder.getAbsolutePath());
-        try (BufferedOutputStream bout = new BufferedOutputStream(new FileOutputStream(outFile))) {
+        long time = System.currentTimeMillis();
+        sortAndFlush(inFile, partitionFolder.getAbsolutePath());
+        System.out.println("Exec time 1 : " + (System.currentTimeMillis() - time));
+        time = System.currentTimeMillis();
+        try (BufferedOutputStream bout = new BufferedOutputStream(new FileOutputStream(outFile), bufferSize)) {
             kSortedMerge(bout, partitionFolder);
         }
+        System.out.println("Exec time 1 : " + (System.currentTimeMillis() - time));
         removeTempFolder(partitionFolder);
     }
 
-    private void inMemorySort(File inFile, String partitionFolderPath) throws IOException {
-        int partitions = 0;
-        Scanner scanner = new Scanner(new BufferedInputStream(new FileInputStream(inFile), bufferSize));
-        scanner.useDelimiter(VALUE_SEPARATOR);
-        while (scanner.hasNext()) {
-            int[] array = read(scanner);
-            sort(array);
-            File outFile = new File(new StringBuilder(partitionFolderPath).append("/").append(partitions++).toString());
-            Path outPath = outFile.toPath();
-            Files.write(outPath, arrayToCSV(array).getBytes());
+    private void sortAndFlush(File inFile, String partitionFolderPath) {
+        try (Scanner scanner = new Scanner(new BufferedInputStream(new FileInputStream(inFile), bufferSize))) {
+            scanner.useDelimiter(VALUE_SEPARATOR);
+            while (scanner.hasNext()) {
+                final int[] array = read(scanner);
+                sort(array);
+                File outFile = new File(
+                        new StringBuilder(partitionFolderPath).append("/").append(UUID.randomUUID().toString())
+                                .toString());
+                Path outPath = outFile.toPath();
+                try {
+                    Files.write(outPath, arrayToCSV(array).getBytes());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error : " + e.getMessage());
         }
-        scanner.close();
     }
 
     private int[] read(Scanner scanner) {
@@ -77,22 +100,27 @@ public class ExternalMSort {
                 .forEach(File::delete);
     }
 
-    private void kSortedMerge(final OutputStream out, final File partitionFolder) throws IOException {
+    private void kSortedMerge(final OutputStream out, final File partitionFolder) {
         final PriorityQueue<QueueReference> pq = new PriorityQueue<>(Comparator.comparingInt(qr -> qr.arrayValue));
         Arrays.stream(partitionFolder.listFiles()).forEach(f -> {
             Scanner scanner = getScanner(f);
             if (scanner != null && scanner.hasNext())
                 pq.add(new QueueReference(scanner.nextInt(), scanner));
         });
-        while (!pq.isEmpty()) {
-            QueueReference queueRef = pq.poll();
-            out.write(String.valueOf(queueRef.arrayValue).getBytes());
-            if (queueRef.scanner.hasNext())
-                pq.add(new QueueReference(queueRef.scanner.nextInt(), queueRef.scanner));
-            else
-                queueRef.scanner.close();
-            if (!pq.isEmpty())
-                out.write(VALUE_SEPARATOR_BYTES);
+        try {
+            while (!pq.isEmpty()) {
+                QueueReference queueRef = pq.poll();
+                out.write(String.valueOf(queueRef.arrayValue).getBytes());
+                if (queueRef.scanner.hasNext())
+                    pq.add(new QueueReference(queueRef.scanner.nextInt(), queueRef.scanner));
+                else
+                    queueRef.scanner.close();
+                if (!pq.isEmpty())
+                    out.write(VALUE_SEPARATOR_BYTES);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error : " + e.getMessage());
         }
     }
 
@@ -147,6 +175,18 @@ public class ExternalMSort {
         while (s2 <= e2)
             merged[idx++] = array[s2++];
         return merged;
+    }
+
+    private boolean isSorted(File file) {
+        Scanner scanner = getScanner(file);
+        int prev = Integer.MIN_VALUE;
+        while (scanner.hasNext()) {
+            int curr = scanner.nextInt();
+            if (prev > curr)
+                return false;
+            prev = curr;
+        }
+        return true;
     }
 
 }

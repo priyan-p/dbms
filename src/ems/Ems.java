@@ -9,11 +9,11 @@ import java.util.Random;
 public class Ems {
 
     public static void main(String[] args) throws Exception {
-        genFile(1024 * 1024 * 10);
+        genFile(100);
     }
 
     static void genFile(int bytes) throws IOException {
-        File file = new File("data/10MB.txt");
+        File file = new File("data/small.txt");
         FileWriter fw = new FileWriter(file);
         BufferedWriter bw = new BufferedWriter(fw);
         int bytesWritten = 0;
