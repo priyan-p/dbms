@@ -32,6 +32,7 @@ public class EmsTest {
                 System.err.println("File not sorted");
             }
             System.out.println("Execution time : " + timeTaken);
+            System.out.println("--------------------------------");
         }
     }
 
