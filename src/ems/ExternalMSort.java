@@ -1,6 +1,13 @@
 package ems;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -8,14 +15,9 @@ import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.Scanner;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 public class ExternalMSort {
-
-    private static ExecutorService processExecutor = Executors.newFixedThreadPool(8);
-    private static ExecutorService ioExecutor = Executors.newFixedThreadPool(20);
 
     private static final String VALUE_SEPARATOR = ",";
     private static final byte[] VALUE_SEPARATOR_BYTES = VALUE_SEPARATOR.getBytes();
@@ -30,32 +32,14 @@ public class ExternalMSort {
         this(1024);
     }
 
-    public static void main(String[] args) throws Exception {
-        final File inFile = new File("data/10MB.txt");
-        final File outFile = new File("data/sorted-" + inFile.getName());
-        final File partitionFolder = new File("data/tmp-partx/");
-        long time = System.currentTimeMillis();
-        ExternalMSort externalMSort = new ExternalMSort(1024 * 700);
-        externalMSort.extSort(inFile, outFile, partitionFolder);
-        System.out.println("Exec time : " + (System.currentTimeMillis() - time));
-        processExecutor.shutdown();
-        ioExecutor.shutdown();
-        System.out.println("Verifying output file...");
-        System.out.println("Sorted : " + new ExternalMSort().isSorted(outFile));
-    }
-
     public void extSort(final File inFile, final File outFile, final File partitionFolder) throws IOException {
         if (partitionFolder.exists())
             removeTempFolder(partitionFolder);
         partitionFolder.mkdirs();
-        long time = System.currentTimeMillis();
         sortAndFlush(inFile, partitionFolder.getAbsolutePath());
-        System.out.println("Exec time 1 : " + (System.currentTimeMillis() - time));
-        time = System.currentTimeMillis();
         try (BufferedOutputStream bout = new BufferedOutputStream(new FileOutputStream(outFile), bufferSize)) {
             kSortedMerge(bout, partitionFolder);
         }
-        System.out.println("Exec time 1 : " + (System.currentTimeMillis() - time));
         removeTempFolder(partitionFolder);
     }
 
@@ -161,12 +145,11 @@ public class ExternalMSort {
         int mid = ((end - start) / 2) + start;
         msort(array, start, mid);
         msort(array, mid + 1, end);
-        int[] merged = merge(array, start, mid, mid + 1, end);
-        for (int i = start, j = 0; i <= end; i++, j++)
-            array[i] = merged[j];
+        merge(array, start, mid, mid + 1, end);
     }
 
-    private int[] merge(int[] array, int s1, int e1, int s2, int e2) {
+    private void merge(int[] array, int s1, int e1, int s2, int e2) {
+        int start = s1, end = e2;
         int merged[] = new int[(e1 - s1) + (e2 - s2) + 2], idx = 0;
         while (s1 <= e1 && s2 <= e2)
             merged[idx++] = array[s1] < array[s2] ? array[s1++] : array[s2++];
@@ -174,10 +157,11 @@ public class ExternalMSort {
             merged[idx++] = array[s1++];
         while (s2 <= e2)
             merged[idx++] = array[s2++];
-        return merged;
+        for (int i = start, j = 0; i <= end; i++, j++)
+            array[i] = merged[j];
     }
 
-    private boolean isSorted(File file) {
+    public boolean isSorted(File file) {
         Scanner scanner = getScanner(file);
         int prev = Integer.MIN_VALUE;
         while (scanner.hasNext()) {
