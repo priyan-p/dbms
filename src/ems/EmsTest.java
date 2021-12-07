@@ -11,11 +11,16 @@ import java.util.Random;
 
 public class EmsTest {
 
-    private static final List<Integer> TEST_FILE_SIZES = Arrays.asList(1024, 1024 * 1024, 1024 * 1024 * 10,
-            1024 * 1024 * 100);
+    private static final List<Integer> TEST_FILE_SIZES = Arrays.asList(
+            1024, // 1KB
+            1024 * 1024, // 1MB
+            1024 * 1024 * 10, // 10MB
+            1024 * 1024 * 100 // 100MB
+    );
 
     public static void main(String[] args) throws Exception {
-        int bufferSize = 1024 * 700;
+        System.out.println();
+        int bufferSize = 1024 * 1024;
         for (int inputFileSize : TEST_FILE_SIZES) {
             File inFile = genFile(inputFileSize, "data/inputFile.txt");
             final File outFile = new File("data/sorted-" + inFile.getName());

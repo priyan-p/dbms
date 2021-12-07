@@ -136,29 +136,7 @@ public class ExternalMSort {
     }
 
     public void sort(int[] array) {
-        msort(array, 0, array.length - 1);
-    }
-
-    private void msort(int[] array, int start, int end) {
-        if (start >= end)
-            return;
-        int mid = ((end - start) / 2) + start;
-        msort(array, start, mid);
-        msort(array, mid + 1, end);
-        merge(array, start, mid, mid + 1, end);
-    }
-
-    private void merge(int[] array, int s1, int e1, int s2, int e2) {
-        int start = s1, end = e2;
-        int merged[] = new int[(e1 - s1) + (e2 - s2) + 2], idx = 0;
-        while (s1 <= e1 && s2 <= e2)
-            merged[idx++] = array[s1] < array[s2] ? array[s1++] : array[s2++];
-        while (s1 <= e1)
-            merged[idx++] = array[s1++];
-        while (s2 <= e2)
-            merged[idx++] = array[s2++];
-        for (int i = start, j = 0; i <= end; i++, j++)
-            array[i] = merged[j];
+        Arrays.sort(array);
     }
 
     public boolean isSorted(File file) {

@@ -1,0 +1,4 @@
+[header]
+tuple_id | slot_id | length
+[data]
+slot_1 - <int8><int16>n<varchar> | slot_2 - <int8><int16>n<varchar>
