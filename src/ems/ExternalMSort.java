@@ -153,16 +153,4 @@ public class ExternalMSort {
         Arrays.sort(array);
     }
 
-    public boolean isSorted(File file) {
-        Scanner scanner = getScanner(file);
-        int prev = Integer.MIN_VALUE;
-        while (scanner.hasNext()) {
-            int curr = scanner.nextInt();
-            if (prev > curr)
-                return false;
-            prev = curr;
-        }
-        return true;
-    }
-
 }

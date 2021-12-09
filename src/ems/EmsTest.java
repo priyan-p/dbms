@@ -2,27 +2,29 @@ package ems;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.Scanner;
 
 public class EmsTest {
 
     private static final List<Integer> TEST_FILE_SIZES = Arrays.asList(
-            1024, // 1KB
-            1024 * 1024, // 1MB
-            1024 * 1024 * 10, // 10MB
-            1024 * 1024 * 100 // 100MB
+            // 1024, // 1KB
+            // 1024 * 1024, // 1MB
+            1024 * 1024 * 10 // 10MB
+    // 1024 * 1024 * 100 // 100MB
     );
 
     public static void main(String[] args) throws Exception {
         System.out.println();
         int bufferSize = 1024 * 1024;
         for (int inputFileSize : TEST_FILE_SIZES) {
-            File inFile = genFile(inputFileSize, "data/inputFile.txt");
+            File inFile = genFile(inputFileSize, "data/inputFile.txt", 99999999);
             final File outFile = new File("data/sorted-" + inFile.getName());
             final File partitionFolder = new File("data/tmp-partx/");
             long time = System.currentTimeMillis();
@@ -31,7 +33,7 @@ public class EmsTest {
             externalMSort.extSort(inFile, outFile, partitionFolder);
             long timeTaken = System.currentTimeMillis() - time;
             System.out.println("Verifying output file...");
-            if (new ExternalMSort().isSorted(outFile)) {
+            if (isSorted(outFile)) {
                 System.out.println("Sorted");
             } else {
                 System.err.println("File not sorted");
@@ -41,7 +43,30 @@ public class EmsTest {
         }
     }
 
-    static File genFile(int bytes, String path) throws IOException {
+    public static boolean isSorted(File file) {
+        Scanner scanner = getScanner(file);
+        int prev = Integer.MIN_VALUE;
+        while (scanner.hasNext()) {
+            int curr = scanner.nextInt();
+            if (prev > curr)
+                return false;
+            prev = curr;
+        }
+        return true;
+    }
+
+    private static Scanner getScanner(File file) {
+        try {
+            Scanner scanner = new Scanner(file);
+            scanner.useDelimiter(",");
+            return scanner;
+        } catch (FileNotFoundException e) {
+            System.err.println(e.getMessage());
+            return null;
+        }
+    }
+
+    public static File genFile(int bytes, String path, int maxValue) throws IOException {
         System.out.println("Generating input file...");
         File inFile = new File(path);
         FileWriter fw = new FileWriter(inFile);
@@ -49,7 +74,7 @@ public class EmsTest {
         int bytesWritten = 0;
         Random random = new Random();
         while (true) {
-            bw.write(String.valueOf(random.nextInt(99999)));
+            bw.write(String.valueOf(random.nextInt(maxValue)));
             bw.write(",");
             bytesWritten += 5;
             if (bytesWritten >= bytes) {
