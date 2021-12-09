@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Scanner;
 import java.util.UUID;
@@ -33,40 +34,42 @@ public class ExternalMSort {
     }
 
     public void extSort(final File inFile, final File outFile, final File partitionFolder) throws IOException {
-        if (partitionFolder.exists())
-            removeTempFolder(partitionFolder);
-        partitionFolder.mkdirs();
+        setupPartitionFolder(partitionFolder);
         sortAndFlush(inFile, partitionFolder.getAbsolutePath());
-        try (BufferedOutputStream bout = new BufferedOutputStream(new FileOutputStream(outFile), bufferSize)) {
-            kSortedMerge(bout, partitionFolder);
-        }
+        mergeSortedFiles(new FileOutputStream(outFile), partitionFolder);
         removeTempFolder(partitionFolder);
     }
 
-    private void sortAndFlush(File inFile, String partitionFolderPath) {
+    private void sortAndFlush(File inFile, String partitionFolderPath) throws FileNotFoundException {
         try (Scanner scanner = new Scanner(new BufferedInputStream(new FileInputStream(inFile), bufferSize))) {
             scanner.useDelimiter(VALUE_SEPARATOR);
             while (scanner.hasNext()) {
                 final int[] array = read(scanner);
                 sort(array);
-                File outFile = new File(
-                        new StringBuilder(partitionFolderPath).append("/").append(UUID.randomUUID().toString())
-                                .toString());
-                Path outPath = outFile.toPath();
-                try {
-                    Files.write(outPath, arrayToCSV(array).getBytes());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                write(new StringBuilder(partitionFolderPath)
+                        .append("/").append(UUID.randomUUID().toString())
+                        .toString(),
+                        arrayToCSV(array).getBytes());
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Error : " + e.getMessage());
+        }
+    }
+
+    private void setupPartitionFolder(File partitionFolder) throws IOException {
+        if (partitionFolder.exists())
+            removeTempFolder(partitionFolder);
+        partitionFolder.mkdirs();
+    }
+
+    private void write(String file, byte[] bytes) {
+        try (BufferedOutputStream bout = new BufferedOutputStream(new FileOutputStream(file))) {
+            bout.write(bytes);
+        } catch (IOException ioe) {
+            System.err.println(ioe.getMessage());
         }
     }
 
     private int[] read(Scanner scanner) {
-        int array[] = new int[bufferSize / 4], idx = 0;
+        int array[] = new int[bufferSize / 3], idx = 0;
         while (idx < array.length && scanner.hasNext())
             array[idx++] = scanner.nextInt();
         if (idx != array.length) {
@@ -77,21 +80,16 @@ public class ExternalMSort {
         return array;
     }
 
-    private void removeTempFolder(File partitionFolder) throws IOException {
-        Files.walk(partitionFolder.toPath())
+    private long removeTempFolder(File partitionFolder) throws IOException {
+        return Files.walk(partitionFolder.toPath())
                 .sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
-                .forEach(File::delete);
+                .map(File::delete).count();
     }
 
-    private void kSortedMerge(final OutputStream out, final File partitionFolder) {
-        final PriorityQueue<QueueReference> pq = new PriorityQueue<>(Comparator.comparingInt(qr -> qr.arrayValue));
-        Arrays.stream(partitionFolder.listFiles()).forEach(f -> {
-            Scanner scanner = getScanner(f);
-            if (scanner != null && scanner.hasNext())
-                pq.add(new QueueReference(scanner.nextInt(), scanner));
-        });
-        try {
+    private void mergeSortedFiles(final OutputStream outStream, final File partitionFolder) throws IOException {
+        try (BufferedOutputStream out = new BufferedOutputStream(outStream, bufferSize)) {
+            PriorityQueue<QueueReference> pq = createQFromPartitionFiles(partitionFolder);
             while (!pq.isEmpty()) {
                 QueueReference queueRef = pq.poll();
                 out.write(String.valueOf(queueRef.arrayValue).getBytes());
@@ -102,10 +100,26 @@ public class ExternalMSort {
                 if (!pq.isEmpty())
                     out.write(VALUE_SEPARATOR_BYTES);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Error : " + e.getMessage());
         }
+    }
+
+    private PriorityQueue<QueueReference> createQFromPartitionFiles(File partitionFolder) {
+        return Arrays.stream(partitionFolder.listFiles())
+                .map(f -> {
+                    Scanner scanner = getScanner(f);
+                    if (scanner != null && scanner.hasNext())
+                        return new QueueReference(scanner.nextInt(), scanner);
+                    return null;
+                })
+                .filter((qr) -> !Objects.isNull(qr))
+                .reduce(new PriorityQueue<QueueReference>((qr1, qr2) -> qr1.arrayValue - qr2.arrayValue),
+                        (pq, qr) -> {
+                            pq.add(qr);
+                            return pq;
+                        }, (q1, q2) -> {
+                            q1.addAll(q2);
+                            return q1;
+                        });
     }
 
     private Scanner getScanner(File file) {
