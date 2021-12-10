@@ -31,7 +31,7 @@ public class RoundRobinPartitioner implements Partitioner {
     @Override
     public void merge(List<InputStream> sources, OutputStream destination, String delimiter) {
         try (BufferedOutputStream out = new BufferedOutputStream(destination)) {
-            PriorityQueue<Record> pq = createQFromPartitionFiles(sources, delimiter);
+            PriorityQueue<Record> pq = createQFromSources(sources, delimiter);
             while (!pq.isEmpty()) {
                 Record record = pq.poll();
                 out.write(String.valueOf(record.val).getBytes());
@@ -47,7 +47,7 @@ public class RoundRobinPartitioner implements Partitioner {
         }
     }
 
-    private PriorityQueue<Record> createQFromPartitionFiles(List<InputStream> sources, String delimiter) {
+    private PriorityQueue<Record> createQFromSources(List<InputStream> sources, String delimiter) {
         return sources.stream()
                 .map(f -> {
                     Scanner scanner = getScanner(f, delimiter);
