@@ -21,7 +21,7 @@ public class RangePartitioner implements Partitioner {
     }
 
     @Override
-    public void divide(InputStream source, String delimiter, List<OutputStream> destinations) {
+    public void divide(InputStream source, List<OutputStream> destinations, String delimiter) {
         try (Scanner scanner = new Scanner(new BufferedInputStream(source))) {
             scanner.useDelimiter(delimiter);
             while (scanner.hasNext()) {
