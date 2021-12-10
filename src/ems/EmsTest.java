@@ -33,7 +33,7 @@ public class EmsTest {
             externalMSort.extSort(inFile, outFile, partitionFolder);
             long timeTaken = System.currentTimeMillis() - time;
             System.out.println("Verifying output file...");
-            if (isSorted(outFile)) {
+            if (isSorted(outFile) && (inFile.length() == outFile.length())) {
                 System.out.println("Sorted");
             } else {
                 System.err.println("File not sorted");
@@ -75,11 +75,11 @@ public class EmsTest {
         Random random = new Random();
         while (true) {
             bw.write(String.valueOf(random.nextInt(maxValue)));
-            bw.write(",");
             bytesWritten += 5;
             if (bytesWritten >= bytes) {
                 break;
             }
+            bw.write(",");
         }
         bw.close();
         System.out.println("Input file generated for size : " + getSize(inFile.length()));
